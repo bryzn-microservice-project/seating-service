@@ -86,4 +86,8 @@ public class MainController {
 
         return response;
     }
+    @PostMapping("/api/v1/confirmation")
+    public ResponseEntity<String> seatPaymentConfirmation(int correlatorId) {
+        return businessLogic.finalizeSeatBooking(correlatorId);
+    }
 }

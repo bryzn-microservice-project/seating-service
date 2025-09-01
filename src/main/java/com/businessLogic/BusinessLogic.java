@@ -1,10 +1,11 @@
 package com.businessLogic;
 
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.util.Date;
 import java.util.HashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.http.HttpStatusCode;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
@@ -25,10 +26,12 @@ public class BusinessLogic {
 
     // REST Clients to communicate with other microservices
     private RestClient apiGatewayClient = RestClient.create();
-    private RestClient paymentServiceClient = RestClient.create();
 
     private HashMap<String, RestClient> restRouter = new HashMap<>();
     private HashMap<RestClient, String> restEndpoints = new HashMap<>();
+
+    // Hash Map to keep track of seats held to their correlatorId
+    HashMap<Integer, Seat> heldSeats = new HashMap<>();
 
     public BusinessLogic(PostgresService postgresService) {
         this.postgresService = postgresService;
@@ -48,10 +51,6 @@ public class BusinessLogic {
     public void mapTopicsToClient() {
         restRouter.put("SeatResponse", apiGatewayClient);
         restEndpoints.put(apiGatewayClient, "http://api-gateway:8081/api/v1/processTopic");
-
-        restRouter.put("PaymentRequest", paymentServiceClient);
-        restEndpoints.put(paymentServiceClient, "http://payment-service:8084/api/v1/processTopic");
-        LOG.info("Sucessfully mapped the topics to their respective microservices...");
     }
 
     /*
@@ -59,29 +58,23 @@ public class BusinessLogic {
      * clients
      */
     public ResponseEntity<String> processSeatRequest(SeatRequest seatRequest) {
-        LOG.info("Received a SeatRequest. Sending the topic to the [Payment Service]");
-        if (sendPaymentRequest(seatRequest.getPayment()).getStatusCode() == HttpStatusCode.valueOf(200)) {
-            LOG.info("PaymentRequest was successfully processed!");
-        } else {
-            LOG.error("Failed to process the payment request...");
-            return ResponseEntity.status(500).body("Internal Error Failed to process SeatRequest");
+        // Seat(LocalDateTime showtime, String seatNumber, SeatingStatus seatingStatus)
+        LocalDateTime timeConversion = seatRequest.getShowtime().toInstant()
+                .atZone(ZoneId.systemDefault())
+                .toLocalDateTime();
+
+        Seat seat = new Seat(timeConversion, seatRequest.getSeatNumber(), Seat.SeatingStatus.HOLDING);
+        Seat postgresSaveResponse = postgresService.save(seat);
+        Status seatStatus = postgresSaveResponse.getId() != null ? Status.HOLDING : Status.FAILED;
+
+        if(seatStatus == Status.HOLDING) {
+            heldSeats.put(seatRequest.getCorrelatorId(), seat);
         }
 
-        Seat seat = new Seat(seatRequest.getShowtime().toString(), seatRequest.getSeatNumber());
-        Seat postgresSaveResponse = postgresService.save(seat);
-        Status seatStatus = postgresSaveResponse.getId() != null ? Status.CONFIRMED : Status.FAILED;
         LOG.info("SeatRequest processed with status: " + seatStatus);
         SeatResponse seatResponse = createSeatResponse(seatRequest, seatStatus);
 
-        restRouter.get("SeatResponse")
-                .post()
-                .uri(restEndpoints.get(restRouter.get("SeatResponse")))
-                .contentType(MediaType.APPLICATION_JSON)
-                .body(seatResponse)
-                .retrieve()
-                .toBodilessEntity();
-
-        return postgresSaveResponse.getId() != null ? ResponseEntity.ok("Entity was created/updated successully")
+        return postgresSaveResponse.getId() != null ? ResponseEntity.ok(seatResponse.toString())
                 : ResponseEntity.status(500).body("Inernal Error Failed to process SeatRequest");
     }
 
@@ -91,18 +84,30 @@ public class BusinessLogic {
         seatResponse.setTopicName("SeatResponse");
         seatResponse.setCorrelatorId(seatRequest.getCorrelatorId());
         seatResponse.setStatus(seatStatus);
+        seatResponse.setMovieName(seatRequest.getMovieName());
+        seatResponse.setSeatNumber(seatRequest.getSeatNumber());
+        seatResponse.setShowtime(seatRequest.getShowtime());
+        seatResponse.setTimestamp(new Date());
         return seatResponse;
     }
 
-    private ResponseEntity<String> sendPaymentRequest(PaymentRequest paymentRequest) {
-        LOG.info("Sending a PaymentRequest to the [Payment Service]");
-        return restRouter.get("PaymentRequest")
-                .post()
-                .uri(restEndpoints.get(restRouter.get("PaymentRequest")))
-                .contentType(MediaType.APPLICATION_JSON)
-                .body(paymentRequest)
-                .retrieve()
-                .toEntity(String.class);
+    // Method to finalize seat booking after payment confirmation received from the
+    // service orchestrator. Uses the held seat mapping to update the seat status to BOOKED
+    public ResponseEntity<String> finalizeSeatBooking(int correlatorId) {
+        LOG.info("Finalizing seat booking for correlatorId: " + correlatorId);
+        Seat seat = heldSeats.get(correlatorId);
+
+        Seat postgresUpdateResponse = postgresService.save(seat);
+        if(postgresUpdateResponse.getSeatingStatus() == Seat.SeatingStatus.BOOKED)
+        {
+            LOG.info("Seat booking finalized successfully for correlatorId: " + correlatorId);
+            heldSeats.remove(correlatorId);
+        } else {
+            LOG.error("Failed to finalize seat booking for correlatorId: " + correlatorId);
+        }
+        return postgresUpdateResponse.getSeatingStatus() == Seat.SeatingStatus.BOOKED ? 
+            ResponseEntity.ok("Seat booking finalized successfully!") : 
+            ResponseEntity.status(500).body("Inernal Error Failed to finalize seat booking");
     }
 
 }

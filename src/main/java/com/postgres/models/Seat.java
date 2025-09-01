@@ -1,5 +1,6 @@
 package com.postgres.models;
 
+import java.time.LocalDateTime;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -11,15 +12,23 @@ public class Seat {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
     private String seatNumber;
-    private String showtime;
+    private LocalDateTime showtime;
+    private SeatingStatus seatingStatus;
+
+    public static enum SeatingStatus {
+        AVAILABLE,
+        HOLDING,
+        BOOKED
+    }
 
     // for JPA only, no use
     public Seat() {
     }
 
-    public Seat(String showtime, String seatNumber) {
+    public Seat(LocalDateTime showtime, String seatNumber, SeatingStatus seatingStatus) {
         this.showtime = showtime;
         this.seatNumber = seatNumber;
+        this.seatingStatus = seatingStatus;
     }
 
     public Long getId() {
@@ -30,11 +39,11 @@ public class Seat {
         this.id = id;
     }
 
-    public String getShowtime() {
+    public LocalDateTime getShowtime() {
         return showtime;
     }
 
-    public void setShowtime(String showtime) {
+    public void setShowtime(LocalDateTime showtime) {
         this.showtime = showtime;
     }
 
@@ -44,5 +53,13 @@ public class Seat {
 
     public void setSeatNumber(String seatNumber) {
         this.seatNumber = seatNumber;
+    }
+
+    public SeatingStatus getSeatingStatus() {
+        return seatingStatus;
+    }
+
+    public void setSeatingStatus(SeatingStatus seatingStatus) {
+        this.seatingStatus = seatingStatus;
     }
 }
