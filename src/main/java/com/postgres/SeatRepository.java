@@ -1,7 +1,7 @@
 package com.postgres;
 
 import org.springframework.data.jpa.repository.JpaRepository;
-import com.postgres.models.Seat;
+import com.postgres.models.Movies;
 import java.util.List;
 
 /*
@@ -22,7 +22,6 @@ import java.util.List;
 
 
 // Spring Data JPA creates CRUD implementation at runtime automatically.
-public interface SeatRepository extends JpaRepository<Seat, Long> {
-	List<Seat> findBySeatNumber(String seatNumber);
-    List<Seat> findByShowtime(String showtime);
+public interface SeatRepository extends JpaRepository<Movies, Long> {
+	List<Movies> findByMovieName(String seatNumber);
 }

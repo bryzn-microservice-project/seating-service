@@ -4,16 +4,18 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestClient;
-
-import com.topics.*;
-import com.topics.SeatResponse.Status;
 import com.postgres.PostgresService;
-import com.postgres.models.Seat;
+import com.postgres.models.Movies;
+import com.postgres.models.Movies.SeatStatus;
+import com.topics.SeatRequest;
+import com.topics.SeatResponse;
+import com.topics.SeatResponse.Status;
 
 /*
  * Handles the business logic for processing various topics and utilizes 
@@ -24,33 +26,14 @@ public class BusinessLogic {
     private static final Logger LOG = LoggerFactory.getLogger(BusinessLogic.class);
     public final PostgresService postgresService;
 
-    // REST Clients to communicate with other microservices
-    private RestClient apiGatewayClient = RestClient.create();
-
-    private HashMap<String, RestClient> restRouter = new HashMap<>();
-    private HashMap<RestClient, String> restEndpoints = new HashMap<>();
-
     // Hash Map to keep track of seats held to their correlatorId
-    HashMap<Integer, Seat> heldSeats = new HashMap<>();
+    HashMap<Integer, Movies> movieMap = new HashMap<>();
+
+    // Hash Map to keep track of held seats before finalizing booking
+    HashMap<Movies, String> heldSeats = new HashMap<>();
 
     public BusinessLogic(PostgresService postgresService) {
         this.postgresService = postgresService;
-        mapTopicsToClient();
-    }
-
-    /*
-     * Method to map topics to their respective microservices and endpoints
-     * # api-gateway:8081
-     * # movie-service:8082
-     * # notification-service:8083
-     * # payment-service:8084
-     * # seating-service:8085
-     * # user-management-service:8086
-     * # gui-service:8087
-     */
-    public void mapTopicsToClient() {
-        restRouter.put("SeatResponse", apiGatewayClient);
-        restEndpoints.put(apiGatewayClient, "http://api-gateway:8081/api/v1/processTopic");
     }
 
     /*
@@ -58,24 +41,56 @@ public class BusinessLogic {
      * clients
      */
     public ResponseEntity<String> processSeatRequest(SeatRequest seatRequest) {
-        // Seat(LocalDateTime showtime, String seatNumber, SeatingStatus seatingStatus)
+        LOG.info("Atempting to reserve a seat for the movie: " + seatRequest.getMovieName() +
+                ", seat number: " + seatRequest.getSeatNumber() +
+                ", showtime: " + seatRequest.getShowtime());
+
         LocalDateTime timeConversion = seatRequest.getShowtime().toInstant()
                 .atZone(ZoneId.systemDefault())
                 .toLocalDateTime();
 
-        Seat seat = new Seat(timeConversion, seatRequest.getSeatNumber(), Seat.SeatingStatus.HOLDING);
-        Seat postgresSaveResponse = postgresService.save(seat);
-        Status seatStatus = postgresSaveResponse.getId() != null ? Status.HOLDING : Status.FAILED;
+        List<Movies> movieCheck = postgresService.findByMovieName(seatRequest.getMovieName());
+        Movies movie = null;
+        Status logStatus = Status.FAILED;
+        String logMessage = "Inernal Error Failed to process SeatRequest";
+        for(Movies m : movieCheck) {
+            Map<String, SeatStatus> seats = m.getSeats();
+            SeatStatus status = seats.get(seatRequest.getSeatNumber());
+            if(seats.get(seatRequest.getSeatNumber()) == null) {
+                LOG.info("Seat " + seatRequest.getSeatNumber() + " does not exist for movie " 
+                    + seatRequest.getMovieName() + " at " + seatRequest.getShowtime());
+                logMessage = "Seat " + seatRequest.getSeatNumber() + " does not exist.";
+                continue;
+            }
+            else if(m.getShowtime().isEqual(timeConversion) && status == SeatStatus.AVAILABLE) {
+                LOG.info("Seat " + seatRequest.getSeatNumber() + " is available. Proceeding to hold the seat...");
+                seats.put(seatRequest.getSeatNumber(), SeatStatus.HOLDING);
+                m.setSeats(seats);
+                movie = postgresService.save(m); 
 
-        if(seatStatus == Status.HOLDING) {
-            heldSeats.put(seatRequest.getCorrelatorId(), seat);
+                // update the hashmap to track the movie and seat.
+                movieMap.put(seatRequest.getCorrelatorId(), movie);
+                heldSeats.put(movie, seatRequest.getSeatNumber());
+                LOG.info("Mappings updated for corelatorId: " + seatRequest.getCorrelatorId() + " to movie ID: " + movie.getId() 
+                    + " and seat number: " + seatRequest.getSeatNumber());
+
+                logStatus = Status.HOLDING;
+                LOG.info("Reserving seat " + seatRequest.getSeatNumber() + " for movie " 
+                    + seatRequest.getMovieName() + " at " + seatRequest.getShowtime());                
+                logMessage = "Seat " + seatRequest.getSeatNumber() + " is now being held.";
+                break;
+            }
+            else{
+                LOG.info("Seat " + seatRequest.getSeatNumber() + " is already booked/held for movie " 
+                    + seatRequest.getMovieName() + " at " + seatRequest.getShowtime());
+                logMessage = "Seat " + seatRequest.getSeatNumber() + " is already booked/held.";
+            }
         }
 
-        LOG.info("SeatRequest processed with status: " + seatStatus);
-        SeatResponse seatResponse = createSeatResponse(seatRequest, seatStatus);
-
-        return postgresSaveResponse.getId() != null ? ResponseEntity.ok(seatResponse.toString())
-                : ResponseEntity.status(500).body("Inernal Error Failed to process SeatRequest");
+        LOG.info("Initial SeatRequest processed with status: " + movie != null ? "HOLDING" : "FAILED");
+        SeatResponse seatResponse = createSeatResponse(seatRequest, logStatus);
+        return movie != null ? ResponseEntity.ok(seatResponse.toString())
+                : ResponseEntity.status(500).body(logMessage);
     }
 
     private SeatResponse createSeatResponse(SeatRequest seatRequest, Status seatStatus) {
@@ -93,20 +108,33 @@ public class BusinessLogic {
 
     // Method to finalize seat booking after payment confirmation received from the
     // service orchestrator. Uses the held seat mapping to update the seat status to BOOKED
-    public ResponseEntity<String> finalizeSeatBooking(int correlatorId) {
+    public ResponseEntity<String> finalizeSeatBooking(Integer correlatorId) {
         LOG.info("Finalizing seat booking for correlatorId: " + correlatorId);
-        Seat seat = heldSeats.get(correlatorId);
+        Movies movie = movieMap.get(correlatorId);
 
-        Seat postgresUpdateResponse = postgresService.save(seat);
-        if(postgresUpdateResponse.getSeatingStatus() == Seat.SeatingStatus.BOOKED)
+        if(movie == null) {
+            LOG.error("No held seat found for correlatorId: " + correlatorId);
+            return ResponseEntity.status(500).body("Inernal Error No held seat found for correlatorId");
+        }
+
+        String seat = heldSeats.get(movie);
+        Map<String, SeatStatus> seats = movie.getSeats();
+        seats.put(seat, SeatStatus.BOOKED);
+        movie.setSeats(seats);
+        
+        Movies bookingResponse = postgresService.save(movie); 
+        if(bookingResponse.getSeats().get(seat) == SeatStatus.BOOKED)
         {
             LOG.info("Seat booking finalized successfully for correlatorId: " + correlatorId);
-            heldSeats.remove(correlatorId);
+
+            // remove mapping
+            movieMap.remove(correlatorId);
+            heldSeats.remove(movie);
         } else {
             LOG.error("Failed to finalize seat booking for correlatorId: " + correlatorId);
         }
-        return postgresUpdateResponse.getSeatingStatus() == Seat.SeatingStatus.BOOKED ? 
-            ResponseEntity.ok("Seat booking finalized successfully!") : 
+        return bookingResponse != null ? 
+            ResponseEntity.ok("Seat has been successfully BOOKED!") : 
             ResponseEntity.status(500).body("Inernal Error Failed to finalize seat booking");
     }
 
