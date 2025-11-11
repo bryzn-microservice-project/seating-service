@@ -10,12 +10,15 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.postgres.PostgresService;
 import com.postgres.models.Movies;
 import com.postgres.models.Movies.SeatStatus;
 import com.topics.SeatRequest;
 import com.topics.SeatResponse;
 import com.topics.SeatResponse.Status;
+import jakarta.transaction.Transactional;
 
 /*
  * Handles the business logic for processing various topics and utilizes 
@@ -40,6 +43,7 @@ public class BusinessLogic {
      * Request handlers for the various topics, which communicate through REST
      * clients
      */
+    @Transactional
     public ResponseEntity<String> processSeatRequest(SeatRequest seatRequest) {
         LOG.info("Atempting to reserve a seat for the movie: " + seatRequest.getMovieName() +
                 ", seat number: " + seatRequest.getSeatNumber() +
@@ -89,7 +93,7 @@ public class BusinessLogic {
 
         LOG.info("Initial SeatRequest processed with status: " + movie != null ? "HOLDING" : "FAILED");
         SeatResponse seatResponse = createSeatResponse(seatRequest, logStatus);
-        return movie != null ? ResponseEntity.ok(seatResponse.toString())
+        return movie != null ? ResponseEntity.ok(toJson(seatResponse))
                 : ResponseEntity.status(500).body(logMessage);
     }
 
@@ -138,4 +142,15 @@ public class BusinessLogic {
             ResponseEntity.status(500).body("Inernal Error Failed to finalize seat booking");
     }
 
+    // Helper method to serialize an object to JSON string
+    private String toJson(Object obj) {
+        try {
+            // Use Jackson ObjectMapper to convert the object to JSON
+            ObjectMapper objectMapper = new ObjectMapper();
+            return objectMapper.writeValueAsString(obj);  // Convert object to JSON string
+        } catch (JsonProcessingException e) {
+            e.printStackTrace();
+            return "{\"error\":\"Error processing JSON\"}";
+        }
+    }
 }
