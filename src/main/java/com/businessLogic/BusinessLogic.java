@@ -137,9 +137,10 @@ public class BusinessLogic {
         } else {
             LOG.error("Failed to finalize seat booking for correlatorId: " + correlatorId);
         }
+
         return bookingResponse != null ? 
-            ResponseEntity.ok("Seat has been successfully BOOKED!") : 
-            ResponseEntity.status(500).body("Inernal Error Failed to finalize seat booking");
+            ResponseEntity.ok(Status.BOOKED.value()) : 
+            ResponseEntity.status(500).body(Status.FAILED.value());
     }
 
     // Helper method to serialize an object to JSON string
