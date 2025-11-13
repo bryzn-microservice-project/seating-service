@@ -44,7 +44,8 @@ public class BusinessLogic {
      * clients
      */
     @Transactional
-    public ResponseEntity<String> processSeatRequest(SeatRequest seatRequest) {
+    public ResponseEntity<Object> processSeatRequest(SeatRequest seatRequest) {
+        System.out.println("\n");
         LOG.info("Atempting to reserve a seat for the movie: " + seatRequest.getMovieName() +
                 ", seat number: " + seatRequest.getSeatNumber() +
                 ", showtime: " + seatRequest.getShowtime());
@@ -56,7 +57,10 @@ public class BusinessLogic {
         List<Movies> movieCheck = postgresService.findByMovieName(seatRequest.getMovieName());
         Movies movie = null;
         Status logStatus = Status.FAILED;
-        String logMessage = "Inernal Error Failed to process SeatRequest";
+        String logMessage = "Internal Error Failed to process SeatRequest";
+
+        if(movieCheck.isEmpty()) logMessage = "No movies found with the title " + seatRequest.getMovieName();
+
         for(Movies m : movieCheck) {
             Map<String, SeatStatus> seats = m.getSeats();
             SeatStatus status = seats.get(seatRequest.getSeatNumber());
@@ -85,13 +89,21 @@ public class BusinessLogic {
                 break;
             }
             else{
-                LOG.info("Seat " + seatRequest.getSeatNumber() + " is already booked/held for movie " 
-                    + seatRequest.getMovieName() + " at " + seatRequest.getShowtime());
-                logMessage = "Seat " + seatRequest.getSeatNumber() + " is already booked/held.";
+                if(!m.getShowtime().isEqual(timeConversion))
+                {
+                    LOG.info("No showtimes for the movie " + m.getMovieName() + " at " + seatRequest.getShowtime());
+                    logMessage = "No showtimes for the movie " + m.getMovieName() + " at " + seatRequest.getShowtime();
+                }
+                else
+                {
+                    LOG.info("Seat " + seatRequest.getSeatNumber() + " is already booked/held for movie " 
+                        + seatRequest.getMovieName() + " at " + seatRequest.getShowtime());
+                    logMessage = "Seat " + seatRequest.getSeatNumber() + " is already booked/held.";
+                }
             }
         }
 
-        LOG.info("Initial SeatRequest processed with status: " + movie != null ? "HOLDING" : "FAILED");
+        LOG.info("Initial SeatRequest processed with status: " + (movie != null ? "HOLDING" : "FAILED"));
         SeatResponse seatResponse = createSeatResponse(seatRequest, logStatus);
         return movie != null ? ResponseEntity.ok(toJson(seatResponse))
                 : ResponseEntity.status(500).body(logMessage);
@@ -118,7 +130,7 @@ public class BusinessLogic {
 
         if(movie == null) {
             LOG.error("No held seat found for correlatorId: " + correlatorId);
-            return ResponseEntity.status(500).body("Inernal Error No held seat found for correlatorId");
+            return ResponseEntity.status(500).body("Internal Error No held seat found for correlatorId");
         }
 
         String seat = heldSeats.get(movie);

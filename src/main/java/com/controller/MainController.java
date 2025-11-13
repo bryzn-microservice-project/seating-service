@@ -42,7 +42,7 @@ public class MainController {
      * Main entry point for processing incoming topics other microservices will use this enpoint
      */
     @PostMapping("/api/v1/processTopic")
-    public ResponseEntity<String> processRestTopics(@RequestBody String jsonString) {
+    public ResponseEntity<Object> processRestTopics(@RequestBody String jsonString) {
         LOG.info("Received an incoming topic... Processing now!");
         System.out.println("\n\nJSON: " + jsonString + "\n\n");
         JSONObject jsonNode = new JSONObject(jsonString);
@@ -61,7 +61,7 @@ public class MainController {
             LOG.error("No schema found for topic: " + topicName);
         }
 
-        ResponseEntity<String> response = null;
+        ResponseEntity<Object> response = null;
 
         if (schemaValidator.validateJson(schemaStream, jsonNode)) {
             ObjectMapper mapper = new ObjectMapper();
