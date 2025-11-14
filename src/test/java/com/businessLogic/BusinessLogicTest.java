@@ -60,7 +60,11 @@ public class BusinessLogicTest {
 			e.printStackTrace();
 		}
 
-		LocalDateTime showtime = LocalDateTime.of(2025, 11, 10, 21, 45, 0); // Nov 10 9:45 pm
+		ZoneId zone = ZoneId.of("America/Chicago"); // CST
+		LocalDateTime showtime = LocalDateTime.of(2025, 11, 10, 21, 45, 0)
+										.atZone(zone)
+										.toLocalDateTime();
+
 		Map<String, SeatStatus> map = new HashMap<>();
 		map.put("A1", SeatStatus.AVAILABLE);
 		map.put("A2", SeatStatus.AVAILABLE);
@@ -142,7 +146,11 @@ public class BusinessLogicTest {
 			e.printStackTrace();
 		}
 
-		LocalDateTime showtime = LocalDateTime.of(2025, 11, 10, 21, 45, 0); // Nov 10 9:45 pm
+		ZoneId zone = ZoneId.of("America/Chicago"); // CST
+		LocalDateTime showtime = LocalDateTime.of(2025, 11, 10, 21, 45, 0)
+										.atZone(zone)
+										.toLocalDateTime();
+										
 		Map<String, SeatStatus> map = new HashMap<>();
 		map.put("A1", SeatStatus.AVAILABLE);
 		map.put("A2", SeatStatus.AVAILABLE);

@@ -30,9 +30,13 @@ jobs:
         uses: actions/setup-java@v4
         with:
           java-version: '21'
+          maven-version: '3.9.6'
           distribution: 'temurin'
           cache: maven
-          server-id: github              
+          server-id: github
+          
+      - name: Set Timezone
+        run: sudo timedatectl set-timezone America/Chicago
 
       - name: Build with Maven
         env:
