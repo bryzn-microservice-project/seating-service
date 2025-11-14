@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -60,10 +61,14 @@ public class BusinessLogicTest {
 			e.printStackTrace();
 		}
 
-		ZoneId zone = ZoneId.of("America/Chicago"); // CST
-		LocalDateTime showtime = LocalDateTime.of(2025, 11, 10, 21, 45, 0)
-										.atZone(zone)
-										.toLocalDateTime();
+		ZoneId cst = ZoneId.of("America/Chicago");
+		ZoneId utc = ZoneId.of("UTC");
+
+		// Create a ZonedDateTime in CST
+		ZonedDateTime showtimeCST = ZonedDateTime.of(2025, 11, 10, 21, 45, 0, 0, cst);
+
+		// Convert it to the same instant in UTC, then to LocalDateTime
+		LocalDateTime showtime = showtimeCST.withZoneSameInstant(utc).toLocalDateTime();
 
 		Map<String, SeatStatus> map = new HashMap<>();
 		map.put("A1", SeatStatus.AVAILABLE);
@@ -146,11 +151,15 @@ public class BusinessLogicTest {
 			e.printStackTrace();
 		}
 
-		ZoneId zone = ZoneId.of("America/Chicago"); // CST
-		LocalDateTime showtime = LocalDateTime.of(2025, 11, 10, 21, 45, 0)
-										.atZone(zone)
-										.toLocalDateTime();
-										
+		ZoneId cst = ZoneId.of("America/Chicago");
+		ZoneId utc = ZoneId.of("UTC");
+
+		// Create a ZonedDateTime in CST
+		ZonedDateTime showtimeCST = ZonedDateTime.of(2025, 11, 10, 21, 45, 0, 0, cst);
+
+		// Convert it to the same instant in UTC, then to LocalDateTime
+		LocalDateTime showtime = showtimeCST.withZoneSameInstant(utc).toLocalDateTime();
+
 		Map<String, SeatStatus> map = new HashMap<>();
 		map.put("A1", SeatStatus.AVAILABLE);
 		map.put("A2", SeatStatus.AVAILABLE);
