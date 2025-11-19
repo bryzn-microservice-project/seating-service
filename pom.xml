@@ -67,15 +67,15 @@
 		</dependency>
 
 		<dependency>
-			<groupId>org.everit.json</groupId>
-			<artifactId>org.everit.json.schema</artifactId>
-			<version>1.5.1</version>
+			<groupId>com.github.erosb</groupId>
+			<artifactId>everit-json-schema</artifactId>
+			<version>1.14.6</version>
 		</dependency>
 
 		<dependency>
 			<groupId>com.ca.bryzn</groupId>
 			<artifactId>icd</artifactId>
-			<version>0.1.7</version>
+			<version>0.1.9</version>
 		</dependency>
 
 		<dependency>
