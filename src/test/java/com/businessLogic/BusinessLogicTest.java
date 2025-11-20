@@ -3,17 +3,17 @@ package com.businessLogic;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Date;
-import java.util.HashMap;
+import java.util.TimeZone;
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
@@ -40,6 +40,11 @@ public class BusinessLogicTest {
 
 	private ObjectMapper objectMapper = new ObjectMapper();
 
+	@BeforeAll
+	static void setUp() {
+		TimeZone.setDefault(TimeZone.getTimeZone("UTC"));
+	}
+
 	@Test
 	@DisplayName("[BUSINESS_LOGIC] Valid SeatRequest & finalize process")
 	public void seatRequest(TestInfo testInfo) {
@@ -59,8 +64,8 @@ public class BusinessLogicTest {
 			request = objectMapper.readValue(JSON, SeatRequest.class);
 		} catch (Exception e) {
 			e.printStackTrace();
-		}
-
+		}		
+		
 		ZoneId cst = ZoneId.of("America/Chicago");
 		ZoneId utc = ZoneId.of("UTC");
 
